@@ -1438,6 +1438,26 @@ export const Route = createFileRoute("/api/chat-ai")({
             }
           })();
 
+          // Episodic memory: everything that happened with this customer
+          // across all their previous conversations.
+          const storedMemoryPromise = (async () => {
+            if (!customer?.id) return null;
+            try {
+              const { loadStoredMemory, renderMemoryForPrompt } = await import(
+                "@/lib/customer-memory.server"
+              );
+              const stored = await loadStoredMemory(supabase, customer.id);
+              return {
+                stored,
+                lines: renderMemoryForPrompt(stored.memory_events),
+              };
+            } catch (e) {
+              console.error("[chat-ai] customer memory read skipped");
+              return null;
+            }
+          })();
+
+
           // What THIS conversation is still waiting for from the brand owner
           // (read here so it overlaps with the reads above; the block itself is
           // built further down, in exactly the same place as before).
@@ -1706,8 +1726,25 @@ export const Route = createFileRoute("/api/chat-ai")({
               profileLines = loaded.lines;
             }
           }
-          if (profileLines.length) {
-            customerContext = buildCustomerContext(customer, recentOrders, profileLines);
+
+          let memoryLines: string[] = [];
+          let storedMemory: import("@/lib/customer-memory.server").CustomerMemory | null = null;
+          let memorySince: string | null = null;
+          let memoryPrevCount = 0;
+          {
+            const loaded = await storedMemoryPromise;
+            if (loaded) {
+              storedMemory = loaded.stored.memory_events;
+              memorySince = loaded.stored.memory_updated_at;
+              memoryPrevCount = Number(loaded.stored.memory_message_count ?? 0);
+              memoryLines = loaded.lines;
+            }
+          }
+          if (profileLines.length || memoryLines.length) {
+            customerContext = buildCustomerContext(customer, recentOrders, [
+              ...profileLines,
+              ...memoryLines,
+            ]);
           }
 
           // The live store blocks (inventory / existing orders / knowledge /
@@ -4319,6 +4356,43 @@ export const Route = createFileRoute("/api/chat-ai")({
               }
             } catch (e) {
               console.error("[chat-ai] cumulative profile update skipped");
+            }
+          }
+
+          // Episodic memory update: merges everything remembered so far with
+          // the dialogue (customer + agent) that happened since, so the agent
+          // never forgets a past request, complaint, decision or promise.
+          if (customer?.id) {
+            try {
+              const {
+                loadDialogueSince,
+                buildCumulativeMemory,
+                persistMemory,
+              } = await import("@/lib/customer-memory.server");
+              const newDialogue = await loadDialogueSince(
+                supabase,
+                merchant_id,
+                customer.id,
+                memorySince,
+              );
+              if (newDialogue.length) {
+                const merged = await buildCumulativeMemory(
+                  lovableApiKey,
+                  storedMemory,
+                  newDialogue,
+                );
+                if (merged) {
+                  await persistMemory(
+                    supabase,
+                    customer.id,
+                    merged,
+                    memoryPrevCount + newDialogue.length,
+                    newDialogue[newDialogue.length - 1]?.created_at ?? null,
+                  );
+                }
+              }
+            } catch (e) {
+              console.error("[chat-ai] cumulative memory update skipped");
             }
           }
 
