@@ -341,7 +341,7 @@ export const AGENT_PROMPT_SECTIONS: AgentPromptSection[] = [
       "If the customer changes something after the summary, do not rebuild the whole summary: state only the line that changed and its new total, then ask once for the go-ahead.",
 
 
-      "(5) ONLY after that go-ahead, call create_order with the complete structured data, including the note in the \"notes\" field if one was given. If they ask for any modification, update the summary and ask again — do not call the tool.",
+      "ONLY after that go-ahead, call create_order with the complete structured data, including the note in the \"notes\" field if one was given.",
       "AFTER create_order — AUTOMATIC payment method (e.g. cash on delivery, or any method registered as automatic): the order IS confirmed. Give the customer the order number and tell them the order is confirmed.",
       "AFTER create_order — MANUAL payment method: the order is NOT confirmed yet. Never say تم تأكيد الأوردر, never imply it is done, and do not present it as finished. Only send the payment instructions and let them know the order is completed once the payment is received.",
       "If the customer requests more than one product, include them all in a single create_order call under one items array; each item carries product name + colour + size + quantity.",
