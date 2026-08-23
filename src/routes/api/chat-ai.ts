@@ -1438,6 +1438,26 @@ export const Route = createFileRoute("/api/chat-ai")({
             }
           })();
 
+          // Episodic memory: everything that happened with this customer
+          // across all their previous conversations.
+          const storedMemoryPromise = (async () => {
+            if (!customer?.id) return null;
+            try {
+              const { loadStoredMemory, renderMemoryForPrompt } = await import(
+                "@/lib/customer-memory.server"
+              );
+              const stored = await loadStoredMemory(supabase, customer.id);
+              return {
+                stored,
+                lines: renderMemoryForPrompt(stored.memory_events),
+              };
+            } catch (e) {
+              console.error("[chat-ai] customer memory read skipped");
+              return null;
+            }
+          })();
+
+
           // What THIS conversation is still waiting for from the brand owner
           // (read here so it overlaps with the reads above; the block itself is
           // built further down, in exactly the same place as before).
