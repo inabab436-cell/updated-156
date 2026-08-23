@@ -4359,6 +4359,43 @@ export const Route = createFileRoute("/api/chat-ai")({
             }
           }
 
+          // Episodic memory update: merges everything remembered so far with
+          // the dialogue (customer + agent) that happened since, so the agent
+          // never forgets a past request, complaint, decision or promise.
+          if (customer?.id) {
+            try {
+              const {
+                loadDialogueSince,
+                buildCumulativeMemory,
+                persistMemory,
+              } = await import("@/lib/customer-memory.server");
+              const newDialogue = await loadDialogueSince(
+                supabase,
+                merchant_id,
+                customer.id,
+                memorySince,
+              );
+              if (newDialogue.length) {
+                const merged = await buildCumulativeMemory(
+                  lovableApiKey,
+                  storedMemory,
+                  newDialogue,
+                );
+                if (merged) {
+                  await persistMemory(
+                    supabase,
+                    customer.id,
+                    merged,
+                    memoryPrevCount + newDialogue.length,
+                    newDialogue[newDialogue.length - 1]?.created_at ?? null,
+                  );
+                }
+              }
+            } catch (e) {
+              console.error("[chat-ai] cumulative memory update skipped");
+            }
+          }
+
 
           await releaseRun?.();
           releaseRun = null;
