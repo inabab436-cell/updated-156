@@ -14,6 +14,7 @@
  *   3e CONTINUITY      settled facts are never re-asked or contradicted
  *   4  CLARIFY         how it asks when it genuinely did not understand
  *   5  SELLING         how it sells
+ *   5b CLOSING         closing instinct, never a data collector
  *   6  TRUTH           where facts may come from
  *   7  BLOCKERS        how it avoids dead ends
  *   8  GAPS            what to do when something is missing
