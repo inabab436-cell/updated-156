@@ -1726,8 +1726,25 @@ export const Route = createFileRoute("/api/chat-ai")({
               profileLines = loaded.lines;
             }
           }
-          if (profileLines.length) {
-            customerContext = buildCustomerContext(customer, recentOrders, profileLines);
+
+          let memoryLines: string[] = [];
+          let storedMemory: import("@/lib/customer-memory.server").CustomerMemory | null = null;
+          let memorySince: string | null = null;
+          let memoryPrevCount = 0;
+          {
+            const loaded = await storedMemoryPromise;
+            if (loaded) {
+              storedMemory = loaded.stored.memory_events;
+              memorySince = loaded.stored.memory_updated_at;
+              memoryPrevCount = Number(loaded.stored.memory_message_count ?? 0);
+              memoryLines = loaded.lines;
+            }
+          }
+          if (profileLines.length || memoryLines.length) {
+            customerContext = buildCustomerContext(customer, recentOrders, [
+              ...profileLines,
+              ...memoryLines,
+            ]);
           }
 
           // The live store blocks (inventory / existing orders / knowledge /
