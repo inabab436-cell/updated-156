@@ -3778,20 +3778,8 @@ export const Route = createFileRoute("/api/chat-ai")({
                   orderConfirmationMessage = String((r.result as any).confirmation_message);
                 }
                 if (r.manualHandover) needsHumanNow = true;
-                if (!r.createdOrderNumber && (r.result as any)?.error === "insufficient_stock") {
-                  const { buildInsufficientStockReply } = await import(
-                    "@/lib/order-tool-replies"
-                  );
-                  orderFailureReply = buildInsufficientStockReply(
-                    Array.isArray((r.result as any)?.shortages)
-                      ? (r.result as any).shortages
-                      : [],
-                  );
-                } else if (!r.createdOrderNumber && (r.result as any)?.error === "db_insert_failed") {
-                  const { ORDER_SAVE_REVIEW_REPLY } = await import(
-                    "@/lib/order-tool-replies"
-                  );
-                  orderFailureReply = ORDER_SAVE_REVIEW_REPLY;
+                if (!r.createdOrderNumber && (r.result as any)?.ok === false) {
+                  orderSaveFailed = true;
                 }
 
               } else if (fnName === "request_handoff") {
