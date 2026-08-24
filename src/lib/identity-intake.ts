@@ -110,85 +110,13 @@ function phoneAsk(reason: string, value: string): string {
   return "الرقم اللي وصلك فيه أكتر من حاجة غلط. قول بس إن الرقم مش مظبوط واطلب الرقم الصحيح بأسلوب ودود مختصر، من غير ما تفصّل الأسباب كلها.";
 }
 
-/**
- * Customer-facing correction used as a deterministic final reply guard.
- *
- * When exactly ONE thing is wrong (only the prefix, or only the digit count),
- * the reply names that mistake straight away — the customer should not have to
- * ask what is wrong. When several things are wrong together, it only says the
- * number is not right and asks for the correct one. The phrasing is picked
- * from a pool so the same sentence is not repeated verbatim every time (an
- * optional `avoid` value keeps it different from the last one).
+/*
+ * NOTE: the previous fixed pools of customer-facing correction sentences were
+ * removed on purpose. The agent phrases every correction itself from the
+ * internal instruction above (`phoneProblemInstruction`), so the customer never
+ * receives a hardcoded sentence and never hears the same wording twice.
  */
-const PHONE_DUMMY_REPLIES = [
-  "الرقم ده شكله مش رقم تواصل حقيقي يا فندم، ياريت حضرتك تبعت رقم نتواصل بيه.",
-  "محتاج رقم تواصل فعلي يا فندم عشان نقدر نوصلك، ياريت حضرتك تبعته.",
-  "الرقم ده مش هينفع للتواصل يا فندم، ممكن حضرتك تبعت رقمك الصحيح؟",
-];
 
-const PHONE_BAD_PREFIX_REPLIES = [
-  "بداية الرقم مش مظبوطة يا فندم، ياريت حضرتك تبعت رقم الموبايل الصحيح.",
-  "الرقم بدايته غريبة شوية يا فندم، ممكن حضرتك تراجعها وتبعت الرقم تاني؟",
-  "يظهر إن بداية الرقم فيها غلط يا فندم، ياريت حضرتك تبعته صح.",
-];
-
-const PHONE_ONE_DIGIT_SHORT_REPLIES = [
-  "الرقم ناقص رقم يا فندم، ياريت حضرتك تبعته كامل.",
-  "واضح إن الرقم ناقص رقم يا فندم، ممكن حضرتك تبعته كامل؟",
-];
-
-const PHONE_TOO_SHORT_REPLIES = [
-  "الرقم ناقص يا فندم، ياريت حضرتك تبعته كامل.",
-  "الرقم مش كامل يا فندم، ياريت حضرتك تكمّله وتبعته.",
-  "واضح إن الرقم مش كامل يا فندم، ممكن حضرتك تبعته تاني؟",
-];
-
-const PHONE_TOO_LONG_REPLIES = [
-  "الرقم فيه رقم زيادة يا فندم، ياريت حضرتك تراجعه وتبعته تاني.",
-  "شكل الرقم زايد عن كده يا فندم، ممكن حضرتك تتأكد منه وتبعته؟",
-  "الرقم فيه رقم زيادة يا فندم، ياريت حضرتك تبعته صح.",
-];
-
-const PHONE_GENERIC_REPLIES = [
-  "الرقم فيه خطأ يا فندم، ياريت حضرتك تبعته تاني.",
-  "الرقم مش مظبوط يا فندم، ياريت حضرتك تتأكد منه وتبعته.",
-  "واضح إن الرقم مكتوب غلط يا فندم، ممكن حضرتك تراجعه وتبعته تاني؟",
-  "معلش يا فندم الرقم شكله مش صح، ياريت حضرتك تبعته تاني.",
-];
-
-function pickReply(pool: string[], avoid?: string | null): string {
-  const options = pool.filter((option) => option !== (avoid ?? "").trim());
-  const list = options.length > 0 ? options : pool;
-  return list[Math.floor(Math.random() * list.length)] ?? pool[0] ?? "الرقم مش مظبوط يا فندم، ياريت حضرتك تبعته تاني.";
-}
-
-export function buildPhoneCorrectionReply(
-  reason: string,
-  avoid?: string | null,
-  value?: string | null,
-): string {
-  if (reason === "dummy") return pickReply(PHONE_DUMMY_REPLIES, avoid);
-
-  // Prefer the value itself: it tells whether ONE thing is wrong or several.
-  const problems = value ? analyzePhoneProblems(value) : null;
-  if (problems && problems.count === 1) {
-    if (problems.badPrefix) return pickReply(PHONE_BAD_PREFIX_REPLIES, avoid);
-    if (problems.tooShort) {
-      const pool = problems.missingDigits === 1
-        ? PHONE_ONE_DIGIT_SHORT_REPLIES
-        : PHONE_TOO_SHORT_REPLIES;
-      return pickReply(pool, avoid);
-    }
-    if (problems.tooLong) return pickReply(PHONE_TOO_LONG_REPLIES, avoid);
-  }
-  if (!problems) {
-    // No raw value available — fall back to the single reason we were given.
-    if (reason === "bad_prefix") return pickReply(PHONE_BAD_PREFIX_REPLIES, avoid);
-    if (reason === "too_short") return pickReply(PHONE_TOO_SHORT_REPLIES, avoid);
-    if (reason === "too_long") return pickReply(PHONE_TOO_LONG_REPLIES, avoid);
-  }
-  return pickReply(PHONE_GENERIC_REPLIES, avoid);
-}
 
 
 
