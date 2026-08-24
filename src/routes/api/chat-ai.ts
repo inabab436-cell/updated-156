@@ -3855,36 +3855,31 @@ export const Route = createFileRoute("/api/chat-ai")({
             pinSnapshotLast(aiMessages, freshStoreSnapshot);
           }
 
-          // Order outcomes that are already decided by deterministic code do
-          // not need a model-authored interpretation. In particular, a save
-          // failure must never turn the customer's valid approval into a loop
-          // asking them to say a magic confirmation phrase again.
-          if (!createdOrderNumber && orderFailureReply) {
-            reply = orderFailureReply;
+          // A failed save never becomes an order number and never becomes a
+          // canned sentence: the model already received the structured tool
+          // result telling it what happened and what to say in its own words.
+          if (orderSaveFailed && !createdOrderNumber) {
+            orderConfirmationMessage = null;
           }
 
           // A model response can never overrule structural phone validation.
           // The number checked here comes from the message itself (digit runs),
           // NOT from wording and NOT only from the AI extraction — an extractor
           // miss on a long conversation used to let an impossible number pass.
+          // Only the ORDER side effects are cancelled here; the wording stays
+          // the model's own (it already got the correction instruction before
+          // it wrote the reply), so no fixed sentence is ever sent.
           {
-            const { buildPhoneCorrectionReply, checkIdentityIntake } =
-              await import("@/lib/identity-intake");
+            const { checkIdentityIntake } = await import("@/lib/identity-intake");
             // The candidate understood for THIS turn already accounts for a
             // number completed across consecutive messages, so a trailing
             // digit ("8") is no longer read as a broken number.
             const candidate = turnPhone?.phone ?? null;
-            // It only overrides the turn in which the customer ACTUALLY sent a
-            // number. If this message carries no number at all (the customer is
-            // asking what is wrong, or talking about something else), the
-            // agent's own natural answer is kept. A number that is already
-            // confirmed is never re-challenged either.
             const phoneIssue =
               candidate && !(phoneConfirmed && !turnPhone?.valid)
                 ? (checkIdentityIntake({ phone: candidate }).find((i) => i.field === "phone") ?? null)
                 : null;
             if (phoneIssue) {
-              reply = buildPhoneCorrectionReply(phoneIssue.reason, null, phoneIssue.value);
               createdOrderNumber = null;
               orderConfirmationMessage = null;
             }
