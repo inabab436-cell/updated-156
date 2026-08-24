@@ -113,7 +113,7 @@ function phoneAsk(reason: string, value: string): string {
 /*
  * NOTE: the previous fixed pools of customer-facing correction sentences were
  * removed on purpose. The agent phrases every correction itself from the
- * internal instruction above (`phoneProblemInstruction`), so the customer never
+ * internal instruction built by `phoneAsk` above, so the customer never
  * receives a hardcoded sentence and never hears the same wording twice.
  */
 
