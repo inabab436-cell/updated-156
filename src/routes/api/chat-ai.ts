@@ -3618,7 +3618,9 @@ export const Route = createFileRoute("/api/chat-ai")({
           let needsHumanNow = false;
           let handoffReason: string | null = null;
           let missingInfoRecorded = false;
-          let orderFailureReply: string | null = null;
+          // A failed order is explained by the model from the tool result's own
+          // structured data — never by a fixed sentence written in the code.
+          let orderSaveFailed = false;
 
 
           const MAX_TOOL_ITERATIONS = 4;
