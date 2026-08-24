@@ -3991,13 +3991,6 @@ export const Route = createFileRoute("/api/chat-ai")({
             }
           }
 
-          if (!reply && additionClaimCorrections > 0 && !createdOrderNumber) {
-            const { ADDITION_NOT_REGISTERED_FALLBACK_REPLY } = await import(
-              "@/lib/order-addition-claim-guard"
-            );
-            reply = ADDITION_NOT_REGISTERED_FALLBACK_REPLY;
-          }
-
           if (!reply) {
 
             if (createdOrderNumber) {
