@@ -3618,7 +3618,9 @@ export const Route = createFileRoute("/api/chat-ai")({
           let needsHumanNow = false;
           let handoffReason: string | null = null;
           let missingInfoRecorded = false;
-          let orderFailureReply: string | null = null;
+          // A failed order is explained by the model from the tool result's own
+          // structured data — never by a fixed sentence written in the code.
+          let orderSaveFailed = false;
 
 
           const MAX_TOOL_ITERATIONS = 4;
@@ -3776,20 +3778,8 @@ export const Route = createFileRoute("/api/chat-ai")({
                   orderConfirmationMessage = String((r.result as any).confirmation_message);
                 }
                 if (r.manualHandover) needsHumanNow = true;
-                if (!r.createdOrderNumber && (r.result as any)?.error === "insufficient_stock") {
-                  const { buildInsufficientStockReply } = await import(
-                    "@/lib/order-tool-replies"
-                  );
-                  orderFailureReply = buildInsufficientStockReply(
-                    Array.isArray((r.result as any)?.shortages)
-                      ? (r.result as any).shortages
-                      : [],
-                  );
-                } else if (!r.createdOrderNumber && (r.result as any)?.error === "db_insert_failed") {
-                  const { ORDER_SAVE_REVIEW_REPLY } = await import(
-                    "@/lib/order-tool-replies"
-                  );
-                  orderFailureReply = ORDER_SAVE_REVIEW_REPLY;
+                if (!r.createdOrderNumber && (r.result as any)?.ok === false) {
+                  orderSaveFailed = true;
                 }
 
               } else if (fnName === "request_handoff") {
@@ -3865,36 +3855,31 @@ export const Route = createFileRoute("/api/chat-ai")({
             pinSnapshotLast(aiMessages, freshStoreSnapshot);
           }
 
-          // Order outcomes that are already decided by deterministic code do
-          // not need a model-authored interpretation. In particular, a save
-          // failure must never turn the customer's valid approval into a loop
-          // asking them to say a magic confirmation phrase again.
-          if (!createdOrderNumber && orderFailureReply) {
-            reply = orderFailureReply;
+          // A failed save never becomes an order number and never becomes a
+          // canned sentence: the model already received the structured tool
+          // result telling it what happened and what to say in its own words.
+          if (orderSaveFailed && !createdOrderNumber) {
+            orderConfirmationMessage = null;
           }
 
           // A model response can never overrule structural phone validation.
           // The number checked here comes from the message itself (digit runs),
           // NOT from wording and NOT only from the AI extraction — an extractor
           // miss on a long conversation used to let an impossible number pass.
+          // Only the ORDER side effects are cancelled here; the wording stays
+          // the model's own (it already got the correction instruction before
+          // it wrote the reply), so no fixed sentence is ever sent.
           {
-            const { buildPhoneCorrectionReply, checkIdentityIntake } =
-              await import("@/lib/identity-intake");
+            const { checkIdentityIntake } = await import("@/lib/identity-intake");
             // The candidate understood for THIS turn already accounts for a
             // number completed across consecutive messages, so a trailing
             // digit ("8") is no longer read as a broken number.
             const candidate = turnPhone?.phone ?? null;
-            // It only overrides the turn in which the customer ACTUALLY sent a
-            // number. If this message carries no number at all (the customer is
-            // asking what is wrong, or talking about something else), the
-            // agent's own natural answer is kept. A number that is already
-            // confirmed is never re-challenged either.
             const phoneIssue =
               candidate && !(phoneConfirmed && !turnPhone?.valid)
                 ? (checkIdentityIntake({ phone: candidate }).find((i) => i.field === "phone") ?? null)
                 : null;
             if (phoneIssue) {
-              reply = buildPhoneCorrectionReply(phoneIssue.reason, null, phoneIssue.value);
               createdOrderNumber = null;
               orderConfirmationMessage = null;
             }
@@ -4006,22 +3991,15 @@ export const Route = createFileRoute("/api/chat-ai")({
             }
           }
 
-          if (!reply && additionClaimCorrections > 0 && !createdOrderNumber) {
-            const { ADDITION_NOT_REGISTERED_FALLBACK_REPLY } = await import(
-              "@/lib/order-addition-claim-guard"
-            );
-            reply = ADDITION_NOT_REGISTERED_FALLBACK_REPLY;
-          }
-
           if (!reply) {
 
             if (createdOrderNumber) {
-              // The merchant's own payment wording — never a generic
-              // "we will contact you" sentence.
+              // Only the merchant's own wording, plus the real order number.
+              // No invented confirmation sentence is written by the code.
               const base = (orderConfirmationMessage ?? "").trim();
               reply = base
                 ? `${base}\nرقم الأوردر: ${createdOrderNumber}`
-                : `تم تأكيد الاوردر يا فندم، ورقم الأوردر: ${createdOrderNumber}.`;
+                : `رقم الأوردر: ${createdOrderNumber}`;
             } else if (needsHumanNow) {
               reply = "تمام يا فندم، هحوّلك دلوقتي للمسؤول.";
             } else if (agentAttachments.length > 0) {

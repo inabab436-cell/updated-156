@@ -79,6 +79,3 @@ export const ADDITION_CLAIM_CORRECTION =
   "the amount due for the addition alone, and the payment instructions it returns. If the customer has not chosen a " +
   "payment method yet, ask them for it and promise nothing else.";
 
-/** Used only if the model still refuses to register after the correction. */
-export const ADDITION_NOT_REGISTERED_FALLBACK_REPLY =
-  "تمام يا فندم، بظبط الإضافة على نفس الطلب دلوقتي وهبعتلك تفاصيل المبلغ المطلوب وطريقة الدفع حالاً.";
