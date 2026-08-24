@@ -4001,12 +4001,12 @@ export const Route = createFileRoute("/api/chat-ai")({
           if (!reply) {
 
             if (createdOrderNumber) {
-              // The merchant's own payment wording — never a generic
-              // "we will contact you" sentence.
+              // Only the merchant's own wording, plus the real order number.
+              // No invented confirmation sentence is written by the code.
               const base = (orderConfirmationMessage ?? "").trim();
               reply = base
                 ? `${base}\nرقم الأوردر: ${createdOrderNumber}`
-                : `تم تأكيد الاوردر يا فندم، ورقم الأوردر: ${createdOrderNumber}.`;
+                : `رقم الأوردر: ${createdOrderNumber}`;
             } else if (needsHumanNow) {
               reply = "تمام يا فندم، هحوّلك دلوقتي للمسؤول.";
             } else if (agentAttachments.length > 0) {
