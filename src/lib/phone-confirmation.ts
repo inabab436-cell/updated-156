@@ -58,6 +58,31 @@ function mobileAttempt(text: unknown): string | null {
   return null;
 }
 
+/**
+ * A number written in PIECES inside ONE message, with other words in between
+ * ("منه البرادي 012 الغربيه 42428684"). The digit runs are joined in the order
+ * they appear, and the result is accepted ONLY when it forms a real Egyptian
+ * mobile number — so quantities, prices or house numbers can never be glued
+ * into a phone number by accident.
+ */
+function assembledAttempt(text: unknown): string | null {
+  const normalized = String(text ?? "")
+    .replace(/[٠-٩]/g, (ch) => String("٠١٢٣٤٥٦٧٨٩".indexOf(ch)))
+    .replace(/[\-().+]/g, "");
+  const runs = normalized.match(/\d+/g) ?? [];
+  if (runs.length < 2) return null;
+  // Only runs that can belong to a mobile number: a lone "3" (a quantity) is
+  // never part of it, while "012" + "42428684" is.
+  const parts = runs.filter((r) => r.length >= 2);
+  for (let start = 0; start < parts.length; start += 1) {
+    for (let end = start + 2; end <= parts.length; end += 1) {
+      const joined = toLocalEgyptianForm(parts.slice(start, end).join(""));
+      if (joined.length === 11 && validateEgyptianPhone(joined).ok) return joined;
+    }
+  }
+  return null;
+}
+
 /** True when the whole message is just a tiny digit fragment ("8", "٧٨"). */
 function digitFragment(text: unknown): string | null {
   const stripped = String(text ?? "").trim().replace(/[\s\-().]/g, "");
@@ -74,7 +99,7 @@ export interface TurnPhone {
   /** Local `01…` form of what the customer is offering as their number. */
   phone: string;
   valid: boolean;
-  /** True when the number was completed across two consecutive messages. */
+  /** True when the number was completed from pieces (same or two messages). */
   assembled: boolean;
 }
 
@@ -97,6 +122,12 @@ export function readTurnPhone(
   const direct = mobileAttempt(currentMessage);
   if (direct && validateEgyptianPhone(direct).ok) {
     return { phone: direct, valid: true, assembled: false };
+  }
+
+  // Pieces inside the SAME message ("012 ... 42428684").
+  const sameMessage = assembledAttempt(currentMessage);
+  if (sameMessage) {
+    return { phone: sameMessage, valid: true, assembled: true };
   }
 
   const fragment = digitFragment(currentMessage);
@@ -137,6 +168,8 @@ export interface PhoneStateBlockInput {
   confirmed?: boolean;
   /** A different number the customer just sent while a confirmed one exists. */
   pendingChange?: string | null;
+  /** The number was pieced together, so it must be read back once. */
+  assembled?: boolean;
 }
 
 /**
@@ -158,10 +191,17 @@ export function buildPhoneStateBlock(input: PhoneStateBlockInput): string {
       );
     }
   } else {
-    lines.push(
-      `- الرقم المستخرَج: ${phone} (لسه غير مؤكد من العميل).`,
-      "- الرقم ده جاي من كلام العميل نفسه: اعتمده وكمّل الطلب عادي، ومتطلبش منه يأكده ومتقراهوش عليه تاني. متكلّمش عنه غير لو شكله غلط فعلاً.",
-    );
+    if (input.assembled) {
+      lines.push(
+        `- الرقم المفهوم: ${phone} — العميل كتبه على أجزاء في كلامه، فالأجزاء اتجمعت وطلعت رقم موبايل مصري صحيح.`,
+        "- ممنوع تقول إن الرقم ناقص أو مش كامل. اكتب الرقم ده بالنص للعميل مرة واحدة واسأله سؤال قصير إذا كان ده الرقم الصح، وكمّل باقي كلامك عادي في نفس الرسالة.",
+      );
+    } else {
+      lines.push(
+        `- الرقم المستخرَج: ${phone} (لسه غير مؤكد من العميل).`,
+        "- الرقم ده جاي من كلام العميل نفسه: اعتمده وكمّل الطلب عادي، ومتطلبش منه يأكده ومتقراهوش عليه تاني. متكلّمش عنه غير لو شكله غلط فعلاً.",
+      );
+    }
   }
   return lines.join("\n");
 }

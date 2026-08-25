@@ -1568,6 +1568,7 @@ export const Route = createFileRoute("/api/chat-ai")({
                   phone: confirmedPhone ?? (turnPhone?.valid ? turnPhone.phone : null),
                   confirmed: Boolean(confirmedPhone),
                   pendingChange,
+                  assembled: Boolean(!confirmedPhone && turnPhone?.valid && turnPhone.assembled),
                 }),
               };
             } catch (e) {
@@ -1766,6 +1767,45 @@ export const Route = createFileRoute("/api/chat-ai")({
 
 
 
+
+          // ------------------------------------------------------------------
+          // PRIORITY BETWEEN BLOCKERS
+          // An area the merchant does not ship to stops the order entirely, so
+          // it is handled ALONE: identity corrections (name/phone/address
+          // details) are not asked in the same turn. The moment the customer
+          // moves to a covered area, everything already given is read back for
+          // one confirmation instead of being asked for again.
+          // ------------------------------------------------------------------
+          let identityBlockForTurn = identityIntakeBlock;
+          let shippingPriorityBlock = "";
+          try {
+            const { resolveShippingCoverage } = await import("@/lib/shipping-lookup.server");
+            const zones = (merchantData.shipping ?? []) as any;
+            const earlierTexts = ((history ?? []) as MessageRow[])
+              .filter((m) => m.role === "user")
+              .slice(-12)
+              .map((m) => String(m.content ?? ""));
+            const now = resolveShippingCoverage(zones, [String(message ?? "")]);
+            if (now.status === "uncovered") {
+              identityBlockForTurn = "";
+              shippingPriorityBlock =
+                "\n\nأولوية هذا الدور: منطقة العميل خارج مناطق الشحن المسجّلة. اتكلم عن الشحن فقط، ومتطلبش أي بيانات تانية ومتصححش أي بيانات وصلت قبل كده في نفس الرسالة.";
+            } else if (now.status === "covered") {
+              const before = resolveShippingCoverage(zones, earlierTexts);
+              const known = [
+                turnProfile?.name ?? customer?.name,
+                confirmedPhone ?? (turnPhone?.valid ? turnPhone.phone : null),
+                turnProfile?.address ?? customer?.address,
+              ].filter(Boolean);
+              if (before.status === "uncovered" && known.length) {
+                shippingPriorityBlock =
+                  "\n\nالعميل غيّر منطقته لمنطقة مغطاة بالشحن بعد ما كانت غير مغطاة. البيانات اللي العميل قالها قبل كده لسه صالحة: اقرأها له مرة واحدة (الاسم والرقم والعنوان اللي عندك) واسأله سؤال واحد قصير إذا كانت دي البيانات اللي نسجّل بيها الطلب، من غير ما تطلبها من الأول تاني.";
+              }
+            }
+          } catch (e) {
+            console.error("[chat-ai] shipping priority skipped");
+          }
+
           const systemPrompt =
             // Inventory is intentionally absent here. It appears exactly once,
             // in the trailing snapshot that is rebuilt for every model pass.
@@ -1773,7 +1813,9 @@ export const Route = createFileRoute("/api/chat-ai")({
             customerContext +
             snapshotPointer +
             paymentBlock +
-            identityIntakeBlock;
+            shippingPriorityBlock +
+            identityBlockForTurn;
+
 
 
 
