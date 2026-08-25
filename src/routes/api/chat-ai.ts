@@ -1568,6 +1568,7 @@ export const Route = createFileRoute("/api/chat-ai")({
                   phone: confirmedPhone ?? (turnPhone?.valid ? turnPhone.phone : null),
                   confirmed: Boolean(confirmedPhone),
                   pendingChange,
+                  assembled: Boolean(!confirmedPhone && turnPhone?.valid && turnPhone.assembled),
                 }),
               };
             } catch (e) {
