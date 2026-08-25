@@ -66,6 +66,28 @@ function namedPlace(zones: ShippingZone[], text: string): string | null {
   return null;
 }
 
+export type ShippingCoverage = "covered" | "uncovered" | "unknown";
+
+/**
+ * Deterministic coverage verdict for the customer's text, used to decide WHAT
+ * the agent is allowed to handle in this turn (see the priority rule in
+ * `chat-ai`): an uncovered area is a blocker, so nothing else is asked until
+ * the customer picks a covered one.
+ */
+export function resolveShippingCoverage(
+  zones: ShippingZone[],
+  texts: Array<string | null | undefined>,
+): { status: ShippingCoverage; place: string | null } {
+  const list = (zones ?? []).filter(Boolean);
+  const clean = (texts ?? []).filter(Boolean) as string[];
+  if (!list.length || !clean.length) return { status: "unknown", place: null };
+  const match = matchShippingZone(list, clean);
+  if (match.zone) return { status: "covered", place: match.zone.region ?? match.zone.country ?? null };
+  const place = namedPlace(list, clean.join(" "));
+  if (place || match.conflict) return { status: "uncovered", place: place ?? null };
+  return { status: "unknown", place: null };
+}
+
 export interface ShippingLookupInput {
   zones: ShippingZone[];
   /** Current customer message first, then earlier customer messages. */
@@ -108,7 +130,8 @@ export function buildShippingLookupBlock(input: ShippingLookupInput): string {
     verdict =
       `النتيجة: العميل ذكر «${place ?? match.addressGovernorate ?? "-"}» وهي مش موجودة في جدول الشحن.\n` +
       "إلزامي: قول للعميل بوضوح ومرة واحدة إن المنطقة دي مش ضمن مناطق الشحن المسجّلة حاليًا، واعرض عليه المناطق المتاحة فوق. " +
-      "ممنوع تقول «هنتأكد ونقولك» أو تكرر نفس الجملة في كل رد، وممنوع تخترع سعر أو مدة، وممنوع تستخدم سعر منطقة تانية.";
+      "ممنوع تقول «هنتأكد ونقولك» أو تكرر نفس الجملة في كل رد، وممنوع تخترع سعر أو مدة، وممنوع تستخدم سعر منطقة تانية.\n" +
+      "الأولوية في الدور ده: موضوع الشحن بس. لأن التوصيل نفسه متوقف، ممنوع تطلب في نفس الرسالة أي بيانات تانية (اسم/رقم/تفاصيل عنوان) ولا تصحّح أي بيانات وصلت قبل كده — استنى العميل يحدد منطقة متاحة الأول.";
   } else {
     verdict =
       "النتيجة: العميل لسه ما حددش منطقته.\n" +
